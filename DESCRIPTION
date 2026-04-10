@@ -12,6 +12,11 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
+    stats
+Depends: 
+    R (>= 3.5)
+LazyData: true
+Suggests:
     tidyverse,
     car,
     pROC,
@@ -19,10 +24,7 @@ Imports:
     ResourceSelection,
     gridExtra,
     scales,
-    knitr
-Depends: 
-    R (>= 3.5)
-LazyData: true
-Suggests: 
-    rmarkdown
+    knitr,
+    rmarkdown,
+    ggplot2
 VignetteBuilder: knitr
