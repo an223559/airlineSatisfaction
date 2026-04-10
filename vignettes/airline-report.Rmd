@@ -288,6 +288,12 @@ model1 <- glm(sat_binary ~
                 checkin_service + onboard_service,
               data = airline_clean, family = binomial)
 
+summary(model1)
+
+# Odds ratios with 95% CI
+cbind(OR = exp(coef(model1)), exp(confint(model1)))
+
+
 # Model 2: Delay (binned)
 airline_clean <- airline_clean %>%
   mutate(
@@ -311,6 +317,9 @@ airline_clean <- airline_clean %>%
 
 model2 <- glm(sat_binary ~ dep_delay_cat + arr_delay_cat,
               data = airline_clean, family = binomial)
+
+summary(model2)
+cbind(OR = exp(coef(model2)), exp(confint(model2)))
 
 cat("Model 1 AIC:", AIC(model1), "\n")
 cat("Model 2 AIC:", AIC(model2), "\n")
