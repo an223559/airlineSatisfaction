@@ -1,3 +1,5 @@
 ^airlineSatisfaction\.Rproj$
 ^\.Rproj\.user$
 ^data-raw$
+^doc$
+^Meta$

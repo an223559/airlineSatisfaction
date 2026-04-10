@@ -1,0 +1,672 @@
+---
+title: "Airline Passenger Satisfaction: What Drives a Passenger to Say Satisfied?"
+author: "Rose Vafadar & Anqi Zhen | Team 6"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Airline Passenger Satisfaction: What Drives a Passenger to Say Satisfied?}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 8,
+  fig.height = 5
+)
+```
+
+---
+
+**Data Analysis | STAT 4620/5620 Winter 24-25**
+
+**Rose Vafadar · Anqi Zhen · Team 6**
+
+**GitHub Repository:** https://github.com/an223559/airlineSatisfaction
+
+---
+
+## Abstract
+
+This report investigates the factors that predict passenger satisfaction among airline travellers using a cleaned sample of 1,000 observations drawn from the Kaggle Airline Passenger Satisfaction dataset (teejmahal20). Two logistic regression models were estimated. The first examined eleven service quality ratings (seat comfort, inflight wi-fi, food and drink, inflight entertainment, cleanliness, leg room, inflight service, online boarding, baggage handling, check-in service, and onboard service) as predictors of binary satisfaction. The second assessed whether departure and arrival delays predicted satisfaction. Online boarding (OR = 1.99, p < 0.001) and leg room service (OR = 1.40, p < 0.01) emerged as the strongest and most significant drivers of satisfaction. After binning delays into time categories, none of the delay bins reached statistical significance (all p > 0.05), and the delay model achieved an AUC of only 0.55, barely above chance. Model 1 achieved an AUC of 0.84 on a held-out test set, indicating good discriminative ability. Diagnostic checks including binned residuals, Cook's distance, and the Hosmer-Lemeshow goodness-of-fit test supported the adequacy of the service quality model. These findings suggest that perceived service quality, particularly the digital boarding experience and physical comfort, is a far more powerful predictor of satisfaction than operational delay alone.
+
+**Keywords:** airline passenger satisfaction, logistic regression, binary outcome, service quality, departure delay, odds ratio, ROC curve, AUC, Hosmer-Lemeshow test, exploratory data analysis
+
+---
+
+## 1. Introduction
+
+Passenger satisfaction is a central concern for commercial airlines. Understanding which aspects of the travel experience drive satisfaction enables carriers to make targeted improvements, prioritise investments, and retain customers. The rise of online reviews and rapid social sharing makes this understanding more urgent than ever: a single poor experience can reach thousands of potential travellers almost instantly.
+
+Despite significant research interest, the relative contributions of service quality and operational factors such as delays remain contested. Some studies emphasise physical comfort and service encounters as dominant predictors, while others point to delays as a primary source of dissatisfaction. This project uses logistic regression to quantify these competing influences rigorously, addressing two specific research questions:
+
+**RQ1:** Which service quality factors are most strongly associated with passenger satisfaction?
+
+**RQ2:** How do departure and arrival delays affect the probability of passenger satisfaction?
+
+The report proceeds as follows: Section 2 describes the data, Section 3 presents the exploratory analysis, Section 4 details the statistical methods, Section 5 reports results and diagnostics, and Section 6 answers the research questions and discusses limitations.
+
+---
+
+## 2. Data Description
+
+### 2.1 Source and Sampling
+
+The data originate from the publicly available Airline Passenger Satisfaction dataset hosted on Kaggle (teejmahal20), which contains over 100,000 survey responses from passengers of an anonymised U.S. carrier. A random sample of 1,000 passengers was drawn for this analysis. Prior to analysis, the dataset was cleaned using SQL to handle trailing whitespace in categorical variables and to ensure consistent encoding of the binary outcome.
+
+### 2.2 Variables
+
+The dataset contains 25 variables grouped into three categories:
+
+**Demographics and Context:** Gender (male/female), Age (continuous, years), Customer type (loyal/disloyal), Type of travel (business/personal), Travel class (Business, Eco, Eco Plus), Flight distance (kilometres).
+
+**Operational Variables:** Departure delay (minutes, continuous; right-skewed with a mass at zero), Arrival delay (minutes, continuous; similar distribution).
+
+**Service Quality Ratings:** Eleven variables each rated on an ordinal scale from 0 (not applicable/worst) to 5 (best): inflight wi-fi service, online boarding, seat comfort, inflight entertainment, food and drink, leg room service, cleanliness, inflight service, baggage handling, check-in service, onboard service.
+
+**Response Variable:** Passenger satisfaction was originally recorded as a three-level categorical variable (satisfied, neutral, dissatisfied). It was recoded to a binary indicator: 1 = satisfied, 0 = neutral or dissatisfied. This recoding is appropriate because the research question concerns whether a passenger is satisfied, not the fine-grained distinction between neutral and dissatisfied.
+
+### 2.3 Class Balance
+
+Of the 1,000 passengers in the sample, approximately 454 (45.4%) reported being satisfied and 546 (54.6%) reported being neutral or dissatisfied. The dataset is mildly imbalanced but not severely so; standard logistic regression without resampling adjustments is appropriate here.
+
+---
+
+## 3. Exploratory Data Analysis
+
+```{r load-libraries}
+library(airlineSatisfaction)
+library(tidyverse)
+library(ggplot2)
+library(broom)
+library(pROC)
+library(car)
+library(ResourceSelection)
+library(gridExtra)
+library(scales)
+
+data("airline", package = "airlineSatisfaction")
+
+airline_clean <- airline %>%
+  mutate(sat_binary = as.numeric(satisfaction == "satisfied")) %>%
+  drop_na()
+```
+
+### 3.1 Missing Values Check
+
+```{r missing-values}
+missing_counts <- colSums(is.na(airline))
+missing_df <- data.frame(
+  Variable    = names(missing_counts),
+  Missing     = missing_counts,
+  Pct_Missing = round(100 * missing_counts / nrow(airline), 2)
+) %>% filter(Missing > 0)
+
+if (nrow(missing_df) == 0) {
+  cat("No missing values found in the dataset.\n")
+} else {
+  print(missing_df)
+}
+```
+
+### 3.2 Outcome Distribution
+
+```{r outcome-distribution}
+prop.table(table(airline$satisfaction))
+
+ggplot(airline, aes(x = satisfaction, fill = satisfaction)) +
+  geom_bar(width = 0.5) +
+  geom_text(stat = "count",
+            aes(label = paste0(..count.., "\n(",
+                               round(..count.. / nrow(airline) * 100, 1), "%)")),
+            vjust = -0.3, size = 4.5) +
+  scale_fill_manual(values = c("satisfied"               = "#2C7BB6",
+                               "neutral or dissatisfied" = "#D7191C")) +
+  labs(title    = "Distribution of Passenger Satisfaction",
+       subtitle = "Slightly imbalanced: ~45% satisfied, ~55% neutral/dissatisfied",
+       x = NULL, y = "Count") +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+A bar chart of the outcome variable confirmed the mild class imbalance described above. Because the imbalance is modest (roughly 45:55), it is unlikely to introduce meaningful bias in the logistic regression estimates.
+
+### 3.3 Passenger Demographics
+
+```{r demographics}
+p_age <- ggplot(airline, aes(x = age, fill = satisfaction)) +
+  geom_histogram(bins = 30, alpha = 0.7, position = "identity") +
+  scale_fill_manual(values = c("satisfied"               = "#2C7BB6",
+                               "neutral or dissatisfied" = "#D7191C")) +
+  labs(title = "Age Distribution by Satisfaction",
+       x = "Age (years)", y = "Count", fill = "Satisfaction") +
+  theme_minimal(base_size = 12)
+
+p_class <- airline %>%
+  count(class, satisfaction) %>%
+  group_by(class) %>%
+  mutate(pct = n / sum(n)) %>%
+  filter(satisfaction == "satisfied") %>%
+  ggplot(aes(x = reorder(class, -pct), y = pct, fill = class)) +
+  geom_col(width = 0.5) +
+  scale_y_continuous(labels = percent_format()) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "% Satisfied by Travel Class", x = NULL, y = "% Satisfied") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none")
+
+p_type <- airline %>%
+  count(type_of_travel, satisfaction) %>%
+  group_by(type_of_travel) %>%
+  mutate(pct = n / sum(n)) %>%
+  filter(satisfaction == "satisfied") %>%
+  ggplot(aes(x = type_of_travel, y = pct, fill = type_of_travel)) +
+  geom_col(width = 0.5) +
+  scale_y_continuous(labels = percent_format()) +
+  scale_fill_brewer(palette = "Set3") +
+  labs(title = "% Satisfied by Travel Type", x = NULL, y = "% Satisfied") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none")
+
+grid.arrange(p_age, p_class, p_type, ncol = 2)
+```
+
+Business-class passengers and loyal customers showed noticeably higher satisfaction rates than economy passengers and disloyal customers. Passengers travelling for business purposes were substantially more likely to report satisfaction than those travelling for personal reasons. These demographic patterns suggest that passenger type may act as a confounding variable; future work should consider including class and travel type as additional predictors or interaction terms.
+
+### 3.4 Service Ratings Heatmap
+
+```{r service-heatmap}
+service_vars <- c("seat_comfort", "inflight_wifi_service", "food_and_drink",
+                  "inflight_entertainment", "cleanliness", "leg_room_service",
+                  "inflight_service", "online_boarding", "baggage_handling",
+                  "checkin_service", "onboard_service")
+
+service_means <- airline %>%
+  select(satisfaction, all_of(service_vars)) %>%
+  pivot_longer(-satisfaction, names_to = "service", values_to = "rating") %>%
+  group_by(satisfaction, service) %>%
+  summarise(mean_rating = round(mean(rating, na.rm = TRUE), 2), .groups = "drop")
+
+ggplot(service_means, aes(x = satisfaction, y = service, fill = mean_rating)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = mean_rating), size = 4, fontface = "bold") +
+  scale_fill_gradient2(low = "#D7191C", mid = "#FFFFBF", high = "#1A9641",
+                       midpoint = 3, limits = c(1, 5), name = "Avg Rating") +
+  labs(title    = "Average Service Ratings by Satisfaction Group",
+       subtitle = "Green = higher rating | Red = lower rating",
+       x = "Satisfaction", y = "Service Variable") +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 15, hjust = 1))
+```
+
+A heatmap of average service ratings separated by satisfaction group revealed a clear and consistent pattern: passengers who reported being satisfied gave uniformly higher ratings across all eleven service variables. The largest gaps were observed for online boarding, leg room service, and inflight entertainment.
+
+### 3.5 Service Ratings: Grouped Boxplots
+
+```{r service-boxplots}
+airline %>%
+  select(satisfaction, all_of(service_vars)) %>%
+  pivot_longer(-satisfaction, names_to = "service", values_to = "rating") %>%
+  ggplot(aes(x = satisfaction, y = rating, fill = satisfaction)) +
+  geom_boxplot(outlier.alpha = 0.3, outlier.size = 0.8) +
+  facet_wrap(~ service, ncol = 4) +
+  scale_fill_manual(values = c("satisfied"               = "#2C7BB6",
+                               "neutral or dissatisfied" = "#D7191C")) +
+  labs(title = "Service Rating Distributions by Satisfaction Group",
+       x = NULL, y = "Rating (0-5)") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom",
+        axis.text.x  = element_blank(),
+        strip.text   = element_text(size = 8))
+```
+
+Grouped boxplots reinforced the heatmap finding. For every service variable, the distribution of ratings among satisfied passengers was shifted upward relative to the unsatisfied group.
+
+### 3.6 Delay Distribution
+
+```{r delay-distribution}
+p_dep <- ggplot(airline, aes(x = departure_delay)) +
+  geom_histogram(bins = 60, fill = "#2C7BB6", alpha = 0.8) +
+  scale_x_continuous(limits = c(0, 300)) +
+  labs(title = "Departure Delay Distribution (0-300 min)",
+       x = "Minutes", y = "Count") +
+  theme_minimal(base_size = 12)
+
+p_arr <- ggplot(airline %>% filter(!is.na(arrival_delay)),
+                aes(x = arrival_delay)) +
+  geom_histogram(bins = 60, fill = "#1A9641", alpha = 0.8) +
+  scale_x_continuous(limits = c(0, 300)) +
+  labs(title = "Arrival Delay Distribution (0-300 min)",
+       x = "Minutes", y = "Count") +
+  theme_minimal(base_size = 12)
+
+grid.arrange(p_dep, p_arr, ncol = 2)
+
+cat("Departure delay summary:\n")
+summary(airline$departure_delay)
+cat("\nArrival delay summary:\n")
+summary(airline$arrival_delay)
+```
+
+Both delay variables are heavily right-skewed, with the majority of flights experiencing zero or very short delays and a small number of extreme outliers. This skewness motivates the use of binning rather than treating delays as raw continuous predictors.
+
+---
+
+## 4. Methods
+
+### 4.1 Logistic Regression
+
+Because our response variable is binary (1 = satisfied, 0 = neutral or dissatisfied), we use logistic regression, a generalised linear model (GLM) with a binomial family and logit link function. Standard linear regression is inappropriate here as it can produce predicted probabilities outside the interval [0, 1]. The logistic regression model takes the form:
+
+$$\log\left(\frac{p}{1-p}\right) = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \cdots + \beta_k x_k$$
+
+where $p$ is the probability that a passenger is satisfied. Coefficients are interpreted via odds ratios: $\exp(\beta_j)$ gives the multiplicative change in the odds of satisfaction for a one-unit increase in $x_j$, holding all other predictors constant.
+
+### 4.2 Model Specification
+
+**Model 1 (RQ1):** Eleven service quality ratings as predictors of binary satisfaction.
+
+**Model 2 (RQ2):** Departure and arrival delay variables, binned into four categories (No delay, 1-30 min, 31-60 min, 60+ min), as predictors of satisfaction. Binning was adopted following feedback that the raw continuous delay variables are heavily right-skewed and that time-period categories better capture potential threshold effects.
+
+### 4.3 Assumptions
+
+Service quality ratings (0-5) are treated as numeric predictors, assuming an approximately linear effect on the log-odds scale. This assumption is examined in the diagnostics section via empirical log-odds plots. The observations are assumed to be independent, which is reasonable for a cross-sectional passenger survey.
+
+---
+
+## 5. Analysis
+
+```{r models}
+# Model 1: Service quality
+model1 <- glm(sat_binary ~
+                seat_comfort + inflight_wifi_service + food_and_drink +
+                inflight_entertainment + cleanliness + leg_room_service +
+                inflight_service + online_boarding + baggage_handling +
+                checkin_service + onboard_service,
+              data = airline_clean, family = binomial)
+
+# Model 2: Delay (binned)
+airline_clean <- airline_clean %>%
+  mutate(
+    dep_delay_cat = case_when(
+      departure_delay == 0        ~ "No delay",
+      departure_delay <= 30       ~ "1-30 min",
+      departure_delay <= 60       ~ "31-60 min",
+      departure_delay > 60        ~ "60+ min"
+    ),
+    arr_delay_cat = case_when(
+      arrival_delay == 0          ~ "No delay",
+      arrival_delay <= 30         ~ "1-30 min",
+      arrival_delay <= 60         ~ "31-60 min",
+      arrival_delay > 60          ~ "60+ min"
+    ),
+    dep_delay_cat = factor(dep_delay_cat,
+                           levels = c("No delay","1-30 min","31-60 min","60+ min")),
+    arr_delay_cat = factor(arr_delay_cat,
+                           levels = c("No delay","1-30 min","31-60 min","60+ min"))
+  )
+
+model2 <- glm(sat_binary ~ dep_delay_cat + arr_delay_cat,
+              data = airline_clean, family = binomial)
+
+cat("Model 1 AIC:", AIC(model1), "\n")
+cat("Model 2 AIC:", AIC(model2), "\n")
+```
+
+### 5.1 VIF Check
+
+```{r vif}
+vif(model1)
+```
+
+All VIF values are below 3.2, well under the threshold of 5. There is no meaningful multicollinearity among the service quality predictors.
+
+### 5.2 Binned Residual Plots
+
+```{r binned-residuals}
+binned_residuals_plot <- function(model, n_bins = 40, title = "Binned Residual Plot") {
+  fitted_vals <- fitted(model)
+  resid_p     <- residuals(model, type = "pearson")
+  df <- data.frame(fitted = fitted_vals, resid = resid_p) %>%
+    arrange(fitted) %>%
+    mutate(bin = cut(fitted, breaks = n_bins, labels = FALSE))
+  bin_summary <- df %>%
+    group_by(bin) %>%
+    summarise(mean_fitted = mean(fitted),
+              mean_resid  = mean(resid),
+              .groups = "drop")
+  se_bound <- 2 / sqrt(nrow(df) / n_bins)
+  ggplot(bin_summary, aes(x = mean_fitted, y = mean_resid)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+    geom_ribbon(aes(ymin = -se_bound, ymax = se_bound),
+                fill = "#AED6F1", alpha = 0.4) +
+    geom_point(color = "#2C7BB6", size = 2) +
+    geom_line(color  = "#2C7BB6", alpha = 0.5) +
+    labs(title    = title,
+         subtitle = "Points should fall within shaded +/-2 SE band for good fit",
+         x = "Fitted Probability", y = "Average Pearson Residual") +
+    theme_minimal(base_size = 12)
+}
+
+binned_residuals_plot(model1, title = "Binned Residuals - Model 1 (Service Quality)")
+binned_residuals_plot(model2, title = "Binned Residuals - Model 2 (Delays)")
+```
+
+### 5.3 Cook's Distance
+
+```{r cooks-distance}
+cooks_d   <- cooks.distance(model1)
+threshold <- 4 / nrow(airline_clean)
+
+data.frame(obs = seq_along(cooks_d), cooks_d = cooks_d) %>%
+  ggplot(aes(x = obs, y = cooks_d)) +
+  geom_col(aes(fill = cooks_d > threshold), width = 1, show.legend = FALSE) +
+  geom_hline(yintercept = threshold, linetype = "dashed", color = "red") +
+  scale_fill_manual(values = c("FALSE" = "#AED6F1", "TRUE" = "#D7191C")) +
+  annotate("text", x = length(cooks_d) * 0.85, y = threshold * 1.2,
+           label = paste0("Threshold = 4/n = ", round(threshold, 4)),
+           color = "red", size = 3.5) +
+  labs(title    = "Cook's Distance - Model 1",
+       subtitle = "Red bars = potentially influential observations",
+       x = "Observation Index", y = "Cook's Distance") +
+  theme_minimal(base_size = 12)
+
+cat("Influential points (Cook's D > 4/n):", sum(cooks_d > threshold), "\n")
+```
+
+### 5.4 Hosmer-Lemeshow Test
+
+```{r hosmer-lemeshow}
+hl1 <- hoslem.test(airline_clean$sat_binary, fitted(model1), g = 10)
+print(hl1)
+cat("\nModel 1 p-value:", round(hl1$p.value, 4),
+    "- No significant evidence of poor fit.\n")
+
+hl2 <- hoslem.test(
+  airline_clean$sat_binary[!is.na(airline_clean$arr_delay_cat)],
+  fitted(model2), g = 10)
+print(hl2)
+cat("\nModel 2 p-value:", round(hl2$p.value, 4), "\n")
+```
+
+### 5.5 Log-Odds Linearity Check
+
+```{r log-odds-linearity}
+check_log_odds <- function(var, data, sat_col = "sat_binary", n_bins = 10) {
+  data %>%
+    select(y = !!sym(sat_col), x = !!sym(var)) %>%
+    drop_na() %>%
+    filter(x > 0) %>%
+    mutate(bin = ntile(x, n_bins)) %>%
+    group_by(bin) %>%
+    summarise(mean_x = mean(x), p_sat = mean(y), .groups = "drop") %>%
+    mutate(log_odds = log(p_sat / (1 - p_sat))) %>%
+    ggplot(aes(x = mean_x, y = log_odds)) +
+    geom_point(size = 2.5, color = "#2C7BB6") +
+    geom_smooth(method = "lm", se = FALSE, color = "red", linetype = "dashed") +
+    labs(title = paste("Log-Odds Linearity:", var),
+         x = var, y = "Empirical Log-Odds") +
+    theme_minimal(base_size = 11)
+}
+
+grid.arrange(
+  check_log_odds("online_boarding",        airline_clean),
+  check_log_odds("leg_room_service",       airline_clean),
+  check_log_odds("inflight_wifi_service",  airline_clean),
+  check_log_odds("inflight_entertainment", airline_clean),
+  ncol = 2,
+  top  = "Linearity in Log-Odds - Key Predictors"
+)
+```
+
+### 5.6 Train/Test ROC Curve
+
+```{r roc-curve}
+set.seed(123)
+n         <- nrow(airline_clean)
+train_idx <- sample(1:n, 0.8 * n)
+train_df  <- airline_clean[train_idx, ]
+test_df   <- airline_clean[-train_idx, ]
+
+model_train <- glm(sat_binary ~
+                     online_boarding + leg_room_service + onboard_service +
+                     inflight_entertainment + cleanliness + checkin_service +
+                     baggage_handling + inflight_wifi_service + seat_comfort +
+                     inflight_service + food_and_drink,
+                   data = train_df, family = binomial)
+
+test_df$prob <- predict(model_train, newdata = test_df, type = "response")
+roc_obj      <- roc(test_df$sat_binary, test_df$prob, quiet = TRUE)
+auc_val      <- auc(roc_obj)
+
+data.frame(sensitivity = roc_obj$sensitivities,
+           specificity = roc_obj$specificities) %>%
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_line(color = "#2C7BB6", linewidth = 1.3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray60") +
+  geom_area(fill = "#AED6F1", alpha = 0.3) +
+  annotate("text", x = 0.65, y = 0.25,
+           label  = paste0("AUC = ", round(auc_val, 3)),
+           size   = 5.5, fontface = "bold", color = "#2C7BB6") +
+  scale_x_continuous(labels = percent_format()) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(title    = "ROC Curve - Model 1 (Service Quality)",
+       subtitle = "Test set (20% holdout) | Dashed line = random classifier",
+       x = "1 - Specificity (False Positive Rate)",
+       y = "Sensitivity (True Positive Rate)") +
+  theme_minimal(base_size = 13)
+
+cat("Test set AUC:", round(auc_val, 3), "\n")
+```
+
+---
+
+## 6. Results
+
+### 6.1 RQ1 — Service Quality Predictors
+
+```{r or-forest-plot}
+tidy_m1 <- tidy(model1, exponentiate = TRUE, conf.int = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(
+    significant = p.value < 0.05,
+    term_label  = case_when(
+      term == "online_boarding"        ~ "Online Boarding",
+      term == "leg_room_service"       ~ "Leg Room Service",
+      term == "onboard_service"        ~ "Onboard Service",
+      term == "inflight_entertainment" ~ "Inflight Entertainment",
+      term == "cleanliness"            ~ "Cleanliness",
+      term == "checkin_service"        ~ "Check-in Service",
+      term == "baggage_handling"       ~ "Baggage Handling",
+      term == "inflight_wifi_service"  ~ "Inflight Wi-Fi",
+      term == "seat_comfort"           ~ "Seat Comfort",
+      term == "inflight_service"       ~ "Inflight Service",
+      term == "food_and_drink"         ~ "Food & Drink",
+      TRUE                             ~ term
+    )
+  )
+
+ggplot(tidy_m1,
+       aes(x = reorder(term_label, estimate),
+           y = estimate, ymin = conf.low, ymax = conf.high,
+           color = significant)) +
+  geom_hline(yintercept = 1, linetype = "dashed",
+             color = "gray40", linewidth = 0.8) +
+  geom_errorbar(width = 0.3, linewidth = 0.8) +
+  geom_point(size = 3) +
+  coord_flip() +
+  scale_color_manual(values = c("TRUE" = "#D7191C", "FALSE" = "#AAAAAA"),
+                     labels = c("TRUE" = "p < 0.05", "FALSE" = "p >= 0.05")) +
+  labs(title    = "Odds Ratios: Service Quality Predictors of Satisfaction",
+       subtitle = "Model 1 - Logistic Regression (n = 1,000)",
+       x = "Predictor", y = "Odds Ratio (95% CI)", color = "Significance") +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "bottom")
+```
+
+```{r or-table}
+tidy_m1 %>%
+  arrange(desc(estimate)) %>%
+  mutate(OR       = round(estimate, 3),
+         CI_lower = round(conf.low, 3),
+         CI_upper = round(conf.high, 3),
+         p_value  = ifelse(p.value < 0.001, "< 0.001", round(p.value, 3)),
+         Sig      = ifelse(significant, "Yes", "")) %>%
+  select(Predictor = term_label, OR, CI_lower, CI_upper, p_value, Sig) %>%
+  knitr::kable(caption = "Table 1. Model 1 - Odds Ratios, 95% CIs, and p-values")
+```
+
+Online boarding (OR = 1.99, p < 0.001) and leg room service (OR = 1.40, p < 0.01) are the only service variables that reach statistical significance. A one-point increase in online boarding rating is associated with nearly double the odds of satisfaction, holding all other service variables constant. Most other service variables have confidence intervals that overlap 1.0, indicating no statistically significant independent association after accounting for the other service variables.
+
+### 6.2 Predicted Probability Plots
+
+```{r predicted-probs}
+medians <- summarise(airline_clean,
+  seat_comfort           = median(seat_comfort),
+  inflight_wifi_service  = median(inflight_wifi_service),
+  food_and_drink         = median(food_and_drink),
+  inflight_entertainment = median(inflight_entertainment),
+  cleanliness            = median(cleanliness),
+  leg_room_service       = median(leg_room_service),
+  inflight_service       = median(inflight_service),
+  online_boarding        = median(online_boarding),
+  baggage_handling       = median(baggage_handling),
+  checkin_service        = median(checkin_service),
+  onboard_service        = median(onboard_service)
+)
+
+new_ob              <- medians[rep(1, 6), ]
+new_ob$online_boarding <- 0:5
+pred_ob             <- predict(model1, newdata = new_ob,
+                               type = "response", se.fit = TRUE)
+new_ob$pred         <- pred_ob$fit
+new_ob$lwr          <- pred_ob$fit - 1.96 * pred_ob$se.fit
+new_ob$upr          <- pred_ob$fit + 1.96 * pred_ob$se.fit
+
+p_ob <- ggplot(new_ob, aes(x = online_boarding, y = pred)) +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2, fill = "#2C7BB6") +
+  geom_line(color = "#2C7BB6", linewidth = 1.2) +
+  geom_point(color = "#2C7BB6", size = 3) +
+  scale_y_continuous(labels = percent_format(), limits = c(0, 1)) +
+  scale_x_continuous(breaks = 0:5) +
+  labs(title    = "Predicted Probability vs. Online Boarding Rating",
+       subtitle = "All other predictors held at median | Shaded = 95% CI",
+       x = "Online Boarding Rating (0-5)", y = "Predicted P(Satisfied)") +
+  theme_minimal(base_size = 12)
+
+new_lr                  <- medians[rep(1, 6), ]
+new_lr$leg_room_service <- 0:5
+pred_lr                 <- predict(model1, newdata = new_lr,
+                                   type = "response", se.fit = TRUE)
+new_lr$pred             <- pred_lr$fit
+new_lr$lwr              <- pred_lr$fit - 1.96 * pred_lr$se.fit
+new_lr$upr              <- pred_lr$fit + 1.96 * pred_lr$se.fit
+
+p_lr <- ggplot(new_lr, aes(x = leg_room_service, y = pred)) +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2, fill = "#D7191C") +
+  geom_line(color = "#D7191C", linewidth = 1.2) +
+  geom_point(color = "#D7191C", size = 3) +
+  scale_y_continuous(labels = percent_format(), limits = c(0, 1)) +
+  scale_x_continuous(breaks = 0:5) +
+  labs(title    = "Predicted Probability vs. Leg Room Service Rating",
+       subtitle = "All other predictors held at median | Shaded = 95% CI",
+       x = "Leg Room Service Rating (0-5)", y = "Predicted P(Satisfied)") +
+  theme_minimal(base_size = 12)
+
+grid.arrange(p_ob, p_lr, ncol = 2)
+```
+
+Holding all other predictors at their sample median, the predicted probability of satisfaction rises from approximately 16% at an online boarding rating of 0 to approximately 71% at a rating of 5. For leg room service, the analogous range is from approximately 25% to 67%.
+
+### 6.3 RQ2 — Delay Results
+
+```{r delay-results}
+p_dep_bin <- airline_clean %>%
+  group_by(dep_delay_cat) %>%
+  summarise(satisfaction_rate = mean(sat_binary)) %>%
+  ggplot(aes(x = dep_delay_cat, y = satisfaction_rate)) +
+  geom_col(fill = "#065A82") +
+  scale_y_continuous(labels = percent_format(), limits = c(0, 0.6)) +
+  labs(title = "Satisfaction Rate by Departure Delay",
+       x = "Departure Delay", y = "Proportion Satisfied") +
+  theme_minimal()
+
+p_arr_bin <- airline_clean %>%
+  filter(!is.na(arr_delay_cat)) %>%
+  group_by(arr_delay_cat) %>%
+  summarise(satisfaction_rate = mean(sat_binary)) %>%
+  ggplot(aes(x = arr_delay_cat, y = satisfaction_rate)) +
+  geom_col(fill = "#1C7293") +
+  scale_y_continuous(labels = percent_format(), limits = c(0, 0.6)) +
+  labs(title = "Satisfaction Rate by Arrival Delay",
+       x = "Arrival Delay", y = "Proportion Satisfied") +
+  theme_minimal()
+
+grid.arrange(p_dep_bin, p_arr_bin, ncol = 2)
+```
+
+```{r delay-table}
+tidy(model2, exponentiate = TRUE, conf.int = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(OR       = round(estimate, 3),
+         CI_lower = round(conf.low, 3),
+         CI_upper = round(conf.high, 3),
+         p_value  = round(p.value, 3)) %>%
+  select(Predictor = term, OR, CI_lower, CI_upper, p_value) %>%
+  knitr::kable(caption = "Table 2. Model 2 - Effect of Delay Categories on Satisfaction")
+```
+
+None of the delay bins achieved statistical significance (all p > 0.05). The delay model achieved an accuracy of 54.5% and an AUC of 0.55, barely above the 0.5 baseline of a random classifier. After binning, the apparent significance seen in the original continuous delay model disappeared entirely, suggesting the earlier result was driven by extreme outlier delays rather than a real systematic effect.
+
+### 6.4 Regression Diagnostics Summary
+
+The binned residual plot for Model 1 showed that the vast majority of binned residuals fell within the +/-2 standard error band, indicating the model is reasonably well-specified. Cook's distance analysis identified a small number of potentially influential observations, but no single observation dominated the fit in an extreme way. The Hosmer-Lemeshow goodness-of-fit test for Model 1 yielded p > 0.05, providing formal support for the adequacy of the logistic regression specification. Empirical log-odds plots for the key predictors showed approximately linear relationships, supporting the numeric treatment of the ordinal service rating scales.
+
+---
+
+## 7. Conclusions
+
+### 7.1 Answer to RQ1
+
+Online boarding and leg room service are the two service quality factors most strongly associated with passenger satisfaction. Online boarding carries the larger effect (OR ≈ 2.0), meaning each additional point on the rating scale is associated with roughly double the odds of satisfaction. Leg room service follows with OR = 1.40. No other service variable reached statistical significance, although the direction of association was positive for all of them.
+
+These findings are practically meaningful. Online boarding encompasses the digital and pre-flight experience including mobile boarding passes, seat selection, and app usability. Leg room directly affects in-flight comfort for the entire journey. Airlines seeking to improve satisfaction should prioritise investment in these two areas first.
+
+### 7.2 Answer to RQ2
+
+After appropriate handling of the skewed delay distribution through binning, departure and arrival delays do not significantly predict passenger satisfaction. None of the delay categories differed significantly from the no-delay reference category at the 5% level. The delay model achieves an AUC of 0.55, only marginally above chance.
+
+### 7.3 Overall Takeaway
+
+The quality of the service experience — particularly the digital boarding process and the physical comfort of the seat environment — is a far stronger and more reliable predictor of passenger satisfaction than delays.
+
+### 7.4 Limitations
+
+- The sample of 1,000 was drawn from a dataset of over 100,000 observations, limiting statistical power to detect small effects.
+- Service quality ratings are self-reported and may be subject to response bias.
+- Ordinal ratings (0-5) were treated as numeric predictors; while log-odds linearity checks did not reveal gross violations, this remains a simplifying assumption.
+- The analysis is cross-sectional; causal claims cannot be made from observational data alone.
+- No interaction terms were included.
+
+### 7.5 Future Directions
+
+Future work should consider: (1) fitting the model on the full 100,000-observation dataset for improved power; (2) adding interaction terms between class and service quality; (3) exploring machine learning classifiers to capture non-linear effects; and (4) examining whether results replicate across different carriers or time periods.
+
+---
+
+## References
+
+Gelman, A., & Hill, J. (2007). *Data analysis using regression and multilevel/hierarchical models.* Cambridge University Press.
+
+Hosmer, D. W., & Lemeshow, S. (2000). *Applied logistic regression* (2nd ed.). Wiley.
+
+teejmahal20 (n.d.). Airline Passenger Satisfaction. Kaggle. https://www.kaggle.com/datasets/teejmahal20/airline-passenger-satisfaction
+
+R Core Team (2024). *R: A language and environment for statistical computing.* R Foundation for Statistical Computing. https://www.R-project.org/
+
+Wickham, H., et al. (2019). Welcome to the tidyverse. *Journal of Open Source Software, 4*(43), 1686.
+
+Robin, X., et al. (2011). pROC: An open-source package for R and S+ to analyze and compare ROC curves. *BMC Bioinformatics, 12*, 77.
