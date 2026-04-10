@@ -17,7 +17,6 @@ Imports:
     pROC,
     broom,
     ResourceSelection,
-    corrplot,
     gridExtra,
     scales,
     knitr
