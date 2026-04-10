@@ -21,7 +21,7 @@ knitr::opts_chunk$set(
 
 ---
 
-**Data Analysis | STAT 4620/5620 Winter 24-25**
+**Data Analysis | STAT 4620/5620 Winter 25-26**
 
 **Rose Vafadar · Anqi Zhen · Team 6**
 
@@ -278,6 +278,20 @@ Service quality ratings (0-5) are treated as numeric predictors, assuming an app
 ---
 
 ## 5. Analysis
+
+
+```{r function-demo}
+# Demonstrate the package function
+service_predictors <- c("seat_comfort", "inflight_wifi_service", "food_and_drink",
+                        "inflight_entertainment", "cleanliness", "leg_room_service",
+                        "inflight_service", "online_boarding", "baggage_handling",
+                        "checkin_service", "onboard_service")
+
+model1_demo <- fit_satisfaction_model(airline_clean, service_predictors)
+cat("Model fitted successfully using fit_satisfaction_model()\n")
+cat("AIC:", AIC(model1_demo), "\n")
+```
+
 
 ```{r models}
 # Model 1: Service quality
