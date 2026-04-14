@@ -676,7 +676,30 @@ ggplot(tidy_m3,
 After controlling for service quality ratings, none of the delay bins remained statistically significant (all p > 0.05). This confirms that the relationship between delays and satisfaction is largely explained by service quality — passengers who experience delays on lower-quality service flights are already more likely to be dissatisfied for other reasons. The combined model achieved an AIC of `r round(AIC(model3), 1)`, only marginally lower than Model 1 alone (AIC = `r round(AIC(model1), 1)`), indicating that adding delay variables does not meaningfully improve model fit once service quality is accounted for.
 
 
-### 6.5 Regression Diagnostics Summary
+### 6.5 Model Comparison
+
+```{r model-comparison}
+model_comparison <- data.frame(
+  Model       = c("Model 1: Service Quality",
+                  "Model 2: Delays Only",
+                  "Model 3: Combined"),
+  AIC         = c(round(AIC(model1), 1),
+                  round(AIC(model2), 1),
+                  round(AIC(model3), 1)),
+  AUC         = c(round(auc_val, 3), 0.547, NA),
+  Predictors  = c("11 service ratings",
+                  "Delay bins only",
+                  "Service ratings + delay bins")
+)
+
+knitr::kable(model_comparison,
+             caption = "Table 3. Model Comparison Summary")
+```
+
+Across all metrics, the service quality model clearly outperformed the delay model in predictive ability. Model 1 achieved an AUC of 0.84 compared to 0.55 for Model 2, and an AIC of `r round(AIC(model1), 1)` compared to `r round(AIC(model2), 1)` for Model 2. The lower AIC indicates substantially better fit, and the higher AUC confirms that service quality ratings provide far more discriminative power for predicting satisfaction than delay duration alone. The combined model (Model 3) achieved only a marginal improvement over Model 1, reinforcing the conclusion that delays contribute little additional explanatory value once service quality is accounted for.
+
+
+### 6.6 Regression Diagnostics Summary
 
 The binned residual plot for Model 1 showed that the vast majority of binned residuals fell within the +/-2 standard error band, indicating the model is reasonably well-specified. Cook's distance analysis identified a small number of potentially influential observations, but no single observation dominated the fit in an extreme way. The Hosmer-Lemeshow goodness-of-fit test for Model 1 yielded p > 0.05, providing formal support for the adequacy of the logistic regression specification. Empirical log-odds plots for the key predictors showed approximately linear relationships, supporting the numeric treatment of the ordinal service rating scales.
 
