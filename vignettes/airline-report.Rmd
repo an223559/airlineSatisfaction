@@ -644,7 +644,39 @@ tidy(model2, exponentiate = TRUE, conf.int = TRUE) %>%
 
 None of the delay bins achieved statistical significance at the 5% level (all p > 0.05). The delay model achieved an accuracy of 54.5% and an AUC of 0.55, barely above the 0.5 baseline of a random classifier. After binning delays into meaningful time categories — as advised — the apparent significance seen in the original continuous model disappeared, suggesting that delay alone was not a statistically strong predictor of satisfaction in this sample of 1,000 passengers.
 
-### 6.4 Regression Diagnostics Summary
+### 6.4 Combined Model: Service Quality + Delays
+
+```{r combined-model-results}
+tidy_m3 <- tidy(model3, exponentiate = TRUE, conf.int = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(
+    type = ifelse(grepl("delay", term), "Delay", "Service Quality"),
+    significant = p.value < 0.05
+  )
+
+ggplot(tidy_m3,
+       aes(x = reorder(term, estimate),
+           y = estimate, ymin = conf.low, ymax = conf.high,
+           color = significant, shape = type)) +
+  geom_hline(yintercept = 1, linetype = "dashed",
+             color = "gray40", linewidth = 0.8) +
+  geom_errorbar(width = 0.3, linewidth = 0.8) +
+  geom_point(size = 3) +
+  coord_flip() +
+  scale_color_manual(values = c("TRUE" = "#D7191C", "FALSE" = "#AAAAAA"),
+                     labels = c("TRUE" = "p < 0.05", "FALSE" = "p >= 0.05")) +
+  scale_shape_manual(values = c("Service Quality" = 16, "Delay" = 17)) +
+  labs(title    = "Odds Ratios: Combined Model (Service Quality + Delays)",
+       subtitle = "Model 3 — circles = service variables, triangles = delay bins",
+       x = "Predictor", y = "Odds Ratio (95% CI)",
+       color = "Significance", shape = "Variable Type") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+```
+After controlling for service quality ratings, none of the delay bins remained statistically significant (all p > 0.05). This confirms that the relationship between delays and satisfaction is largely explained by service quality — passengers who experience delays on lower-quality service flights are already more likely to be dissatisfied for other reasons. The combined model achieved an AIC of `r round(AIC(model3), 1)`, only marginally lower than Model 1 alone (AIC = `r round(AIC(model1), 1)`), indicating that adding delay variables does not meaningfully improve model fit once service quality is accounted for.
+
+
+### 6.5 Regression Diagnostics Summary
 
 The binned residual plot for Model 1 showed that the vast majority of binned residuals fell within the +/-2 standard error band, indicating the model is reasonably well-specified. Cook's distance analysis identified a small number of potentially influential observations, but no single observation dominated the fit in an extreme way. The Hosmer-Lemeshow goodness-of-fit test for Model 1 yielded p > 0.05, providing formal support for the adequacy of the logistic regression specification. Empirical log-odds plots for the key predictors showed approximately linear relationships, supporting the numeric treatment of the ordinal service rating scales.
 
