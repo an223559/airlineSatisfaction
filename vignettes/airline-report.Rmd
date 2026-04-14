@@ -337,6 +337,20 @@ cbind(OR = exp(coef(model2)), exp(confint(model2)))
 
 cat("Model 1 AIC:", AIC(model1), "\n")
 cat("Model 2 AIC:", AIC(model2), "\n")
+
+# Model 3: Combined model (service quality + delays)
+model3 <- glm(sat_binary ~
+                seat_comfort + inflight_wifi_service + food_and_drink +
+                inflight_entertainment + cleanliness + leg_room_service +
+                inflight_service + online_boarding + baggage_handling +
+                checkin_service + onboard_service +
+                dep_delay_cat + arr_delay_cat,
+              data = airline_clean, family = binomial)
+
+summary(model3)
+cbind(OR = exp(coef(model3)), exp(confint(model3)))
+cat("Model 3 (Combined) AIC:", AIC(model3), "\n")
+
 ```
 
 ### 5.1 VIF Check
