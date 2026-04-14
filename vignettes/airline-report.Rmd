@@ -642,7 +642,7 @@ tidy(model2, exponentiate = TRUE, conf.int = TRUE) %>%
   knitr::kable(caption = "Table 2. Model 2 - Effect of Delay Categories on Satisfaction")
 ```
 
-None of the delay bins achieved statistical significance (all p > 0.05). The delay model achieved an accuracy of 54.5% and an AUC of 0.55, barely above the 0.5 baseline of a random classifier. After binning, the apparent significance seen in the original continuous delay model disappeared entirely, suggesting the earlier result was driven by extreme outlier delays rather than a real systematic effect.
+None of the delay bins achieved statistical significance at the 5% level (all p > 0.05). The delay model achieved an accuracy of 54.5% and an AUC of 0.55, barely above the 0.5 baseline of a random classifier. After binning delays into meaningful time categories — as advised — the apparent significance seen in the original continuous model disappeared, suggesting that delay alone was not a statistically strong predictor of satisfaction in this sample of 1,000 passengers.
 
 ### 6.4 Regression Diagnostics Summary
 
@@ -660,11 +660,11 @@ These findings are practically meaningful. Online boarding encompasses the digit
 
 ### 7.2 Answer to RQ2
 
-After appropriate handling of the skewed delay distribution through binning, departure and arrival delays do not significantly predict passenger satisfaction. None of the delay categories differed significantly from the no-delay reference category at the 5% level. The delay model achieves an AUC of 0.55, only marginally above chance.
+After appropriate handling of the skewed delay distribution through binning, departure and arrival delays were not statistically strong predictors of passenger satisfaction in this sample. None of the delay categories differed significantly from the no-delay reference category at the 5% level. The delay model achieves an AUC of 0.55, only marginally above chance.
 
 ### 7.3 Overall Takeaway
 
-The quality of the service experience — particularly the digital boarding process and the physical comfort of the seat environment — is a far stronger and more reliable predictor of passenger satisfaction than delays.
+The quality of the service experience — particularly the digital boarding process and the physical comfort of the seat environment — emerged as a far stronger predictor of passenger satisfaction than delay duration alone in this dataset.
 
 ### 7.4 Limitations
 
