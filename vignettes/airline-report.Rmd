@@ -31,7 +31,7 @@ knitr::opts_chunk$set(
 
 ## Abstract
 
-This report investigates the factors that predict passenger satisfaction among airline travellers using a cleaned sample of 1,000 observations drawn from the Kaggle Airline Passenger Satisfaction dataset (teejmahal20). Two logistic regression models were estimated. The first examined eleven service quality ratings (seat comfort, inflight wi-fi, food and drink, inflight entertainment, cleanliness, leg room, inflight service, online boarding, baggage handling, check-in service, and onboard service) as predictors of binary satisfaction. The second assessed whether departure and arrival delays predicted satisfaction. Online boarding (OR = 1.99, p < 0.001) and leg room service (OR = 1.40, p < 0.01) emerged as the strongest and most significant drivers of satisfaction. After binning delays into time categories, none of the delay bins reached statistical significance (all p > 0.05), and the delay model achieved an AUC of only 0.55, barely above chance. Model 1 achieved an AUC of 0.84 on a held-out test set, indicating good discriminative ability. Diagnostic checks including binned residuals, Cook's distance, and the Hosmer-Lemeshow goodness-of-fit test supported the adequacy of the service quality model. These findings suggest that perceived service quality, particularly the digital boarding experience and physical comfort, is a far more powerful predictor of satisfaction than operational delay alone.
+This report investigates the factors that predict passenger satisfaction among airline travellers using a cleaned sample of 1,000 observations drawn from the Kaggle Airline Passenger Satisfaction dataset (teejmahal20). Two logistic regression models were estimated. The first examined eleven service quality ratings (seat comfort, inflight wi-fi, food and drink, inflight entertainment, cleanliness, leg room, inflight service, online boarding, baggage handling, check-in service, and onboard service) as predictors of binary satisfaction. The second assessed whether departure and arrival delays predicted satisfaction. Online boarding (OR = 1.99, p < 0.001) and leg room service (OR = 1.40, p < 0.01) emerged as the strongest and most significant drivers of satisfaction. After binning delays into time categories, none of the delay bins reached statistical significance (all p > 0.05), and the delay model achieved an AUC of only 0.55, barely above chance. Model 1 achieved an AUC of 0.84 on a held-out test set, indicating good discriminative ability. Diagnostic checks including binned residuals, Cook's distance, and the Hosmer-Lemeshow goodness-of-fit test supported the adequacy of the service quality model. These findings suggest that perceived service quality, especially online boarding and leg room service, was more strongly associated with satisfaction than delay duration alone in this sample.
 
 **Keywords:** airline passenger satisfaction, logistic regression, binary outcome, service quality, departure delay, odds ratio, ROC curve, AUC, Hosmer-Lemeshow test, exploratory data analysis
 
@@ -41,7 +41,7 @@ This report investigates the factors that predict passenger satisfaction among a
 
 Passenger satisfaction is a central concern for commercial airlines. Understanding which aspects of the travel experience drive satisfaction enables carriers to make targeted improvements, prioritise investments, and retain customers. The rise of online reviews and rapid social sharing makes this understanding more urgent than ever: a single poor experience can reach thousands of potential travellers almost instantly.
 
-Despite significant research interest, the relative contributions of service quality and operational factors such as delays remain contested. Some studies emphasise physical comfort and service encounters as dominant predictors, while others point to delays as a primary source of dissatisfaction. This project uses logistic regression to quantify these competing influences rigorously, addressing two specific research questions:
+Previous research has examined both service quality and operational factors such as delays, but it is still not fully clear which has the stronger relationship with passenger satisfaction. Some studies emphasise physical comfort and service encounters as dominant predictors, while others point to delays as a primary source of dissatisfaction. This project uses logistic regression to compare the effects of service quality and delays on passenger satisfaction, addressing two specific research questions:
 
 **RQ1:** Which service quality factors are most strongly associated with passenger satisfaction?
 
@@ -267,9 +267,11 @@ where $p$ is the probability that a passenger is satisfied. Coefficients are int
 
 ### 4.2 Model Specification
 
-**Model 1 (RQ1):** Eleven service quality ratings as predictors of binary satisfaction.
+**Model 1 (RQ1):** Eleven service quality ratings as predictors of binary satisfaction. All eleven variables were retained because they represent conceptually distinct aspects of the passenger experience, and the goal was to assess their independent associations with satisfaction rather than to produce the most parsimonious predictive model.
 
 **Model 2 (RQ2):** Departure and arrival delay variables, binned into four categories (No delay, 1-30 min, 31-60 min, 60+ min), as predictors of satisfaction. Binning was adopted following feedback that the raw continuous delay variables are heavily right-skewed and that time-period categories better capture potential threshold effects.
+
+**Model 3 (Combined):** All service quality ratings plus delay bins included together, to evaluate whether delays added explanatory value after accounting for service quality, even if their individual effects were weak.
 
 ### 4.3 Assumptions
 
@@ -556,7 +558,7 @@ tidy_m1 %>%
   knitr::kable(caption = "Table 1. Model 1 - Odds Ratios, 95% CIs, and p-values")
 ```
 
-Online boarding (OR = 1.99, p < 0.001) and leg room service (OR = 1.40, p < 0.01) are the only service variables that reach statistical significance. A one-point increase in online boarding rating is associated with nearly double the odds of satisfaction, holding all other service variables constant. Most other service variables have confidence intervals that overlap 1.0, indicating no statistically significant independent association after accounting for the other service variables.
+Online boarding (OR = 1.99, p < 0.001) and leg room service (OR = 1.40, p < 0.01) were the only service variables that reached statistical significance. A one-point increase in online boarding rating is associated with nearly double the odds of satisfaction, holding all other service variables constant. Most other service variables have confidence intervals that overlap 1.0, indicating no statistically significant independent association after accounting for the other service variables.
 
 ### 6.2 Predicted Probability Plots
 
@@ -656,7 +658,7 @@ tidy(model2, exponentiate = TRUE, conf.int = TRUE) %>%
   knitr::kable(caption = "Table 2. Model 2 - Effect of Delay Categories on Satisfaction")
 ```
 
-None of the delay bins achieved statistical significance at the 5% level (all p > 0.05). The delay model achieved an accuracy of 54.5% and an AUC of 0.55, barely above the 0.5 baseline of a random classifier. After binning delays into meaningful time categories — as advised — the apparent significance seen in the original continuous model disappeared, suggesting that delay alone was not a statistically strong predictor of satisfaction in this sample of 1,000 passengers.
+None of the delay bins achieved statistical significance at the 5% level (all p > 0.05). The delay model achieved an accuracy of 54.5% and an AUC of 0.55, barely above the 0.5 baseline of a random classifier. After delays were grouped into time categories, the significance seen in the original continuous model disappeared. This suggests that delay alone was not a strong statistical predictor of satisfaction in this sample of 1,000 passengers.
 
 ### 6.4 Combined Model: Service Quality + Delays
 
@@ -715,7 +717,7 @@ Across all metrics, the service quality model clearly outperformed the delay mod
 
 ### 6.6 Regression Diagnostics Summary
 
-The binned residual plot for Model 1 showed that the vast majority of binned residuals fell within the +/-2 standard error band, indicating the model is reasonably well-specified. Cook's distance analysis identified a small number of potentially influential observations, but no single observation dominated the fit in an extreme way. The Hosmer-Lemeshow goodness-of-fit test for Model 1 yielded p > 0.05, providing formal support for the adequacy of the logistic regression specification. Empirical log-odds plots for the key predictors showed approximately linear relationships, supporting the numeric treatment of the ordinal service rating scales.
+The binned residual plot for Model 1 showed that most binned residuals fell within the +/-2 standard error band, suggesting no strong evidence of major misspecification, although some caution is still warranted given the ordinal nature of the predictors. Cook's distance analysis identified a small number of potentially influential observations; while no single point appeared to dominate the fit severely, these observations are worth noting. The Hosmer-Lemeshow goodness-of-fit test for Model 1 yielded p > 0.05, suggesting the model fit is reasonable overall. Empirical log-odds plots for the key predictors showed approximately linear relationships for most variables, which provides some support for treating the ordinal ratings as numeric, though minor deviations were present at the lower end of the scale.
 
 ---
 
@@ -725,19 +727,19 @@ The binned residual plot for Model 1 showed that the vast majority of binned res
 
 Online boarding and leg room service are the two service quality factors most strongly associated with passenger satisfaction. Online boarding carries the larger effect (OR ≈ 2.0), meaning each additional point on the rating scale is associated with roughly double the odds of satisfaction. Leg room service follows with OR = 1.40. No other service variable reached statistical significance, although the direction of association was positive for all of them.
 
-These findings are practically meaningful. Online boarding encompasses the digital and pre-flight experience including mobile boarding passes, seat selection, and app usability. Leg room directly affects in-flight comfort for the entire journey. Airlines seeking to improve satisfaction should prioritise investment in these two areas first.
+These findings are also meaningful in practice. Online boarding encompasses the digital and pre-flight experience including mobile boarding passes, seat selection, and app usability. Leg room directly affects in-flight comfort for the entire journey. Airlines seeking to improve satisfaction should prioritise investment in these two areas first.
 
 ### 7.2 Answer to RQ2
 
-After appropriate handling of the skewed delay distribution through binning, departure and arrival delays were not statistically strong predictors of passenger satisfaction in this sample. None of the delay categories differed significantly from the no-delay reference category at the 5% level. The delay model achieves an AUC of 0.55, only marginally above chance.
+In this sample, departure and arrival delays were not statistically strong predictors of passenger satisfaction after delays were grouped into time categories. None of the delay categories differed significantly from the no-delay reference category at the 5% level. The delay model achieves an AUC of 0.55, only marginally above chance.
 
 ### 7.3 Overall Takeaway
 
-The quality of the service experience — particularly the digital boarding process and the physical comfort of the seat environment — emerged as a far stronger predictor of passenger satisfaction than delay duration alone in this dataset.
+The quality of the service experience — particularly the digital boarding process and the physical comfort of the seat environment — showed substantially stronger associations with passenger satisfaction than delay duration alone in this sample.
 
 ### 7.4 Limitations
 
-- The sample of 1,000 was drawn from a dataset of over 100,000 observations, limiting statistical power to detect small effects.
+- The sample of 1,000 was drawn from a dataset of over 100,000 observations, limiting statistical power to detect small effects. In particular, some delay categories contained relatively few observations (e.g. the 31-60 min departure delay bin had only 67 cases), which may have reduced the ability to detect effects within those bins.
 - Service quality ratings are self-reported and may be subject to response bias.
 - Ordinal ratings (0-5) were treated as numeric predictors; while log-odds linearity checks did not reveal gross violations, this remains a simplifying assumption.
 - The analysis is cross-sectional; causal claims cannot be made from observational data alone.
